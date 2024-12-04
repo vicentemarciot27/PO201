@@ -57,9 +57,6 @@ class HFVRP:
         """Verifica se uma rota é viável para um tipo de veículo
         
         Retorna False se:
-        1. A demanda total excede a capacidade do veículo
-        2. A rota não começa ou termina no depósito
-        3. A rota está vazia ou tem apenas o depósito
         """
         # Verifica se a rota começa e termina no depósito
         if not route or len(route) < 3 or route[0] != self.depot or route[-1] != self.depot:
