@@ -1,9 +1,9 @@
 ﻿# PO201 - Exame Final
 
 # Divisão de Trabalho
-- Carlos Eduardo Pereira Sampaio: Busca Local
-- Leonardo Fernandes Trevilato: Solução Inicial
-- Marcio Vicente da Silva Filho: Integração com POO e apresentação final
+- Carlos Eduardo Pereira Sampaio: Busca local, Procedimento de perturbação.
+- Leonardo Fernandes Trevilato: Construção da solução inicial, Controle de diversidade.
+- Marcio Vicente da Silva Filho: Critério de aceitação, Critério de parada, Integração, Cálculo do custo total, Apresentação do trabalho.
 
 # Estrutura Principal
 
