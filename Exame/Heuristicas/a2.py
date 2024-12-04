@@ -12,40 +12,37 @@ onde:
 """
 
 def a2(hfvrp: HFVRP, routes: list[tuple[list[int], int]], vertex_to_insert: int) -> tuple[int, float]:
-    vertex_to_insert = int(vertex_to_insert)
+
+    # Procura por rotas vazias primeiro
+    for route_idx, (route, vehicle_type) in enumerate(routes):
+        if len(route) == 2:  # Rota só com depósito
+            if hfvrp.demands[vertex_to_insert] <= hfvrp.vehicle_capacity[vehicle_type]:
+                return route_idx, 1
+
+    # find smallest cost from vertex to insert to any vertex in the route
     min_cost = float('inf')
     best_pos = None
     best_route_idx = None
-
+    
+    # Percorre cada rota
     for route_idx, (route, vehicle_type) in enumerate(routes):
-        # Caso especial: rota com apenas um cliente
-        if len(route) == 3 and route[0] == route[2] == 1:
-            # Pula se o vértice a ser inserido já está na rota
-            if vertex_to_insert == route[1]:
-                best_route_idx = route_idx
-                best_pos = 1
-                continue
-                
-            cost = (hfvrp.distances[(1, vertex_to_insert)] + 
-                   hfvrp.distances[(vertex_to_insert, route[1])] - 
-                   hfvrp.distances[(1, route[1])])
-            if cost < min_cost:
-                min_cost = cost
-                best_pos = 1  # Inserir entre o depósito e o único cliente
-                best_route_idx = route_idx
-                continue
 
-        # Código original para rotas maiores
+        # check if vertex demand + total route demand > vehicle capacity
+        if hfvrp.demands[vertex_to_insert] + sum(hfvrp.demands[v] for v in route if v != hfvrp.depot) > hfvrp.vehicle_capacity[vehicle_type]:
+            continue
+
         for j in range(len(route) - 1):
-            if route[j] == route[j+1] == 1:
-                continue
-            cost = (hfvrp.distances[(route[j], vertex_to_insert)] + 
-                   hfvrp.distances[(vertex_to_insert, route[j+1])] - 
-                   hfvrp.distances[(route[j], route[j+1])])
+            # Calcula o custo considerando o coeficiente do veículo
+            custo_atual = hfvrp.distances[(route[j], route[j+1])] * hfvrp.vehicle_cost_coef[vehicle_type]
+            custo_novo = (hfvrp.distances[(route[j], vertex_to_insert)] * hfvrp.vehicle_cost_coef[vehicle_type] +
+                         hfvrp.distances[(vertex_to_insert, route[j+1])] * hfvrp.vehicle_cost_coef[vehicle_type])
+            
+            # Custo incremental é a diferença entre o novo custo e o custo atual
+            cost = custo_novo - custo_atual
             
             if cost < min_cost:
                 min_cost = cost
-                best_pos = j + 1
+                best_pos = j + 1  # Posição após o vértice mais próximo
                 best_route_idx = route_idx
                 
     return best_route_idx, best_pos

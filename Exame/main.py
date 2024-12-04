@@ -2,6 +2,9 @@ from HFVRP import HFVRP
 from AILS import AILS
 from utils import read_file
 
+from Heuristicas.h1 import h1
+from Heuristicas.h2 import h2
+
 def read_instance(filename):
     hfvrp = HFVRP()
     
@@ -36,6 +39,19 @@ if __name__ == "__main__":
     
     # Configura e executa o AILS
     ails = AILS(hfvrp)
+    # initial_solution = ails.construct_initial_solution()
+    # print(initial_solution)
+    # print(f"Custo: {ails._evaluate_solution(initial_solution)}")
+    # local_search = ails.local_search(initial_solution)
+    # print(local_search)
+    # print(f"Custo: {ails._evaluate_solution(local_search)}")
+    # perturbation = ails.perturbation_procedure(reference_solution=local_search,
+    #                                             removal_heuristic=h2, alpha=1)
+    # print(perturbation)
+    # print(f"Custo: {ails._evaluate_solution(perturbation)}")
+
     solution = ails.solve()
     print(solution)
     print(f"Custo: {ails._evaluate_solution(solution)}")
+
+    

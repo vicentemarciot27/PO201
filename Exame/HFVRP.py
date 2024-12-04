@@ -70,16 +70,25 @@ class HFVRP:
         clients = [v for v in route if v != self.depot]
         if len(clients) != len(set(clients)):
             print("Rota inviável: há repetição de clientes")
+            # para o código 
+            print(f"Clientes repetidos na rota: {route}")
+            print(f"Clientes únicos: {set(clients)}")
+            print(f"Clientes duplicados: {[x for x in clients if clients.count(x) > 1]}")
+            raise ValueError("Rota inviável: há repetição de clientes")
+
             return False
         
         # Verifica se a demanda total não excede a capacidade
         total_demand = sum(self.demands[i] for i in route if i != self.depot)
         if total_demand > self.vehicle_capacity[vehicle_type]:
             # print("Rota inviável: demanda total excede a capacidade do veículo")
+            # print(f"Rota: {route}")
             # # Escreva um breakdown das demandas
             # print(f"Breakdown das demandas: {total_demand} > {self.vehicle_capacity[vehicle_type]}")
+            # input("Pressione Enter para continuar...")
             return False
         
+        # print(f"Rota: {route}")
         # print("Rota viável")
         return True
     
@@ -97,3 +106,67 @@ class HFVRP:
                 f"- Total demand: {sum(self.demands.values())}\n"
                 f"- Total available fleet capacity: {[self.vehicle_capacity[t] * self.vehicle_quantity[t] for t in self.T]}\n"
                 f"- Total fleet size: {sum(self.vehicle_quantity.values())} vehicles")
+
+    def factibilize_solution(self, solution):
+        """Tenta tornar uma solução inviável em viável
+        
+        Retorna:
+        - (solution, success): Tupla com a solução modificada e um booleano indicando sucesso
+        """
+        
+        max_attempts = 100  # Evita loop infinito
+        attempt = 0
+        
+        while not self.check_solution_feasibility(solution) and attempt < max_attempts:
+            modified = False
+            
+            # Tenta ajustar rotas problemáticas
+            for i, (route, vehicle_type) in enumerate(solution):
+                if not self.check_route_feasibility(route, vehicle_type):
+                    # Tenta encontrar veículo com maior capacidade
+                    better_vehicle = self._find_better_vehicle(vehicle_type)
+                    if better_vehicle:
+                        solution[i] = (route, better_vehicle)
+                        modified = True
+                        continue
+                    
+                    # Se não conseguiu trocar veículo, divide a rota
+                    if len(route) > 3:  # Só divide se tiver mais de um cliente
+                        route1, route2 = self._split_route(route)
+                        solution[i] = (route1, vehicle_type)
+                        solution.append((route2, vehicle_type))
+                        modified = True
+            
+            if not modified:
+                return solution, False
+            
+            attempt += 1
+        
+        return solution, self.check_solution_feasibility(solution)
+
+    def _find_better_vehicle(self, current_type):
+        """Encontra veículo com maior capacidade disponível"""
+        best_type = None
+        best_capacity = self.vehicle_capacity[current_type]
+        
+        for t in self.T:
+            if (self.vehicle_quantity[t] > 0 and 
+                self.vehicle_capacity[t] > best_capacity):
+                best_type = t
+                best_capacity = self.vehicle_capacity[t]
+        
+        return best_type
+
+    def _split_route(self, route):
+        """Divide uma rota em duas partes balanceadas"""
+        if len(route) <= 3:  # Depósito-Cliente-Depósito
+            return route, [self.depot, self.depot]
+        
+        # Remove depósito do início e fim
+        clients = route[1:-1]
+        mid = len(clients) // 2
+        
+        route1 = [self.depot] + clients[:mid] + [self.depot]
+        route2 = [self.depot] + clients[mid:] + [self.depot]
+        
+        return route1, route2
