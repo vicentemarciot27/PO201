@@ -28,5 +28,5 @@ def a1(hfvrp: HFVRP, routes: list[tuple[list[int], int]], vertex_to_insert: int)
                 min_dist = dist
                 best_pos = j + 1  # Posição após o vértice mais próximo
                 best_route_idx = route_idx
-                
+    
     return best_route_idx, best_pos

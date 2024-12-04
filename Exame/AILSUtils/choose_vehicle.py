@@ -10,6 +10,7 @@ def choose_vehicle(self, route):
     
     if not valid_vehicles:
         raise ValueError("Nenhum veículo disponível tem capacidade suficiente para atender esta rota")
-        
-    # Retorna o veículo com menor capacidade que atenda a demanda
-    return min(valid_vehicles, key=lambda t: self.hfvrp.vehicle_capacity[t])
+    
+    veiculo_escolhido = random.choice(valid_vehicles)
+    
+    return veiculo_escolhido

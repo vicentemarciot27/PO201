@@ -15,8 +15,11 @@ class AILS:
     def __init__(self, hfvrp: HFVRP, config: typing.Optional[dict] = None):
         self.hfvrp = hfvrp
         self.config = config or {
-            'lambda': 15,
-            'eta': 0.7
+            'lambda': 20,
+            'eta': 0.2,
+            'd_beta': 15,
+            'alpha': 0.4,
+            'DEV': False
         }
         
         # Melhor solução encontrada
@@ -32,15 +35,15 @@ class AILS:
         self.diversity_controls = {}  # Parâmetros de controle de diversidade por heurística
 
         self.omega = {
-            h1: 1,
-            h2: 1
+            h1: 3,
+            h2: 3
         }
         
     def construct_initial_solution(self):
         iteration = 0
         while True:  # tenta até encontrar uma solução viável
             iteration += 1
-            if iteration % 1000 == 0:
+            if iteration % 1000 == 0 and self.config.get('DEV', False):
                 print(f"Iteration {iteration}")
                 input("Pressione Enter para continuar...")
                 
@@ -50,10 +53,11 @@ class AILS:
             # Calcula m (número mínimo de rotas)
             total_demand = sum(self.hfvrp.demands[v] for v in self.hfvrp.Vc)
             max_capacity = max(self.hfvrp.vehicle_capacity[t] for t in self.hfvrp.T)
-            print(f"Total demand: {total_demand}")
-            print(f"Max capacity: {max_capacity}")
             m = math.ceil(total_demand / max_capacity)
-            print(f"m: {m}")
+            if self.config.get('DEV', False):
+                print(f"Total demand: {total_demand}")
+                print(f"Max capacity: {max_capacity}")
+                print(f"m: {m}")
             
             # cria rotas iniciais
             while True:  # tenta criar rotas iniciais até encontrar uma solução viável
@@ -66,7 +70,9 @@ class AILS:
                         
                     v1 = random.choice(vertices_nao_atendidos_copy)
                     route = [self.hfvrp.depot, v1, self.hfvrp.depot]
-                    vehicle = 3
+                    
+                    # Escolhe o veículo mais adequado para a rota inicial
+                    vehicle = choose_vehicle(self, route)
                     
                     # Se não encontrou veículo disponível, tenta novamente
                     if vehicle is None:
@@ -81,6 +87,7 @@ class AILS:
                         best_route_idx, best_pos = a1(self.hfvrp, routes, v)
                         route = routes[best_route_idx][0]
                         route.insert(best_pos, v)
+                        routes[best_route_idx] = (route, vehicle)
                         vertices_nao_atendidos_copy.remove(v)
                         
                         # Verifica viabilidade após cada inserção
@@ -175,15 +182,16 @@ class AILS:
         reference_solution = [(list(route), vehicle) for route, vehicle in reference_solution]
 
         insertion_heuristic = random.choice(self.insertion_heuristics)
-        print(f"Heurística de inserção: {insertion_heuristic}")
-
-        print(f"Solução inicial: {solution}")
-
+        if self.config.get('DEV', False):
+            print(f"Heurística de inserção: {insertion_heuristic}")
+            print(f"Solução inicial: {solution}")
+        
         # Passo 1: Altera o número de rotas com probabilidade α
         if random.random() < alpha:
             current_m = len(solution)
             new_m = current_m + random.choice([-1, 1])  # aumenta ou diminui em 1
-            print(f"Novo número de rotas: {new_m}")
+            if self.config.get('DEV', False):
+                print(f"Novo número de rotas: {new_m}")
             if m_min <= new_m <= m_max:
                 if new_m < current_m:
                     # seleciona uma rota aleatória para remover
@@ -197,20 +205,26 @@ class AILS:
                     for vertex in removed_route[0][1:-1]:
                         # tenta inserir o cliente em outra rota usando a heurística
                         best_route_idx, best_pos = insertion_heuristic(self.hfvrp, solution, vertex)
-                        
                         if best_route_idx is not None and best_pos is not None:
-                            solution[best_route_idx][0].insert(best_pos, vertex)
-                            print(f"Cliente {vertex} reinserido na rota {best_route_idx}")
+                            vehicle = choose_vehicle(self, solution[best_route_idx][0])
+                            
+                            if vehicle is not None:
+                                solution[best_route_idx][0].insert(best_pos, vertex)
+                                solution[best_route_idx] = (solution[best_route_idx][0], vehicle)
+                                if self.config.get('DEV', False):
+                                    print(f"Cliente {vertex} reinserido na rota {best_route_idx}")
                         else:
-                            print(f"Não foi possível inserir cliente {vertex}")
+                            if self.config.get('DEV', False):
+                                print(f"Não foi possível inserir cliente {vertex}")
                             # se não conseguir inserir, retorna a solução original
                             return reference_solution
                 else:
                     # adiciona uma rota
                     solution.append(([self.hfvrp.depot, self.hfvrp.depot], random.choice(self.hfvrp.T)))
         
-        # Passo 2: Seleciona 2 rotas aleatórias e altera o tipo de veículo
-        routes_to_change = random.sample(range(len(solution)), 2)
+        # Passo 2: Seleciona K rotas aleatórias e altera o tipo de veículo
+        K = 5
+        routes_to_change = random.sample(range(len(solution)), 5)
         for idx in routes_to_change:
             route = solution[idx][0]
             if random.random() < alpha:
@@ -224,20 +238,23 @@ class AILS:
             # remove o vértice da sua rota atual
             route = solution[route_idx][0]
             route.remove(vertex_to_remove)
-            print(f"Removido {vertex_to_remove} da rota {route_idx}")
+            if self.config.get('DEV', False):
+                print(f"Removido {vertex_to_remove} da rota {route_idx}")
             
             # Tenta inserir normalmente primeiro
             best_route_idx, best_pos = insertion_heuristic(self.hfvrp, solution, vertex_to_remove)
             # Se não conseguiu inserir, tenta fazer upgrade nos veículos
             if best_route_idx is None:
-                print(f"Tentando upgrade de veículos para inserir {vertex_to_remove}")
+                if self.config.get('DEV', False):
+                    print(f"Tentando upgrade de veículos para inserir {vertex_to_remove}")
                 for i, (route, vehicle_type) in enumerate(solution):
                     if vehicle_type < len(self.hfvrp.T) - 1:  # Verifica se pode fazer upgrade
                         # Tenta fazer upgrade do veículo
                         solution[i] = (route, vehicle_type + 1)
                         best_route_idx, best_pos = insertion_heuristic(self.hfvrp, solution, vertex_to_remove)
                         if best_route_idx is not None:
-                            print(f"Upgrade bem sucedido! Veículo da rota {i} atualizado para tipo {vehicle_type + 1}")
+                            if self.config.get('DEV', False):
+                                print(f"Upgrade bem sucedido! Veículo da rota {i} atualizado para tipo {vehicle_type + 1}")
                             break
                         else:
                             # Se não deu certo, reverte o upgrade
@@ -245,15 +262,63 @@ class AILS:
             
             if best_route_idx is not None:
                 solution[best_route_idx][0].insert(best_pos, vertex_to_remove)
-                print(f"Reinserido {vertex_to_remove} na rota {best_route_idx}")
+                if self.config.get('DEV', False):
+                    print(f"Reinserido {vertex_to_remove} na rota {best_route_idx}")
             else:
-                print(f"Não foi possível inserir {vertex_to_remove} mesmo com upgrades")
+                if self.config.get('DEV', False):
+                    print(f"Não foi possível inserir {vertex_to_remove} mesmo com upgrades")
                 return reference_solution
 
         return solution
 
     def update_diversity_control(self, solution, reference_solution, removal_heuristic):
-        pass
+        """
+        Atualiza o controle de diversidade para uma heurística de remoção.
+        """
+
+        # Calcula a distância entre as soluções
+        def calculate_distance(sol1, sol2):
+            # Converte rotas em conjuntos de arestas
+            def get_edges(sol):
+                edges = set()
+                for route, _ in sol:
+                    for i in range(len(route)-1):
+                        edge = tuple(sorted([route[i], route[i+1]]))
+                        edges.add(edge)
+                return edges
+            
+            edges1 = get_edges(sol1)
+            edges2 = get_edges(sol2)
+            
+            # Retorna número de arestas diferentes (diferença simétrica)
+            return len(edges1.symmetric_difference(edges2))
+
+        # Inicializa controles se necessário
+        if removal_heuristic not in self.diversity_controls:
+            self.diversity_controls[removal_heuristic] = {
+                'distances': [],
+                'iterations': 0
+            }
+        
+        ctrl = self.diversity_controls[removal_heuristic]
+        ctrl['iterations'] += 1
+        
+        # Calcula e armazena a distância
+        distance = calculate_distance(solution, reference_solution)
+        ctrl['distances'].append(distance)
+        
+        # Ajusta omega a cada lambda iterações
+        if ctrl['iterations'] % (self.config['lambda']/5) == 0:
+            d_H = sum(ctrl['distances']) / len(ctrl['distances'])  # distância média
+            d_beta = self.config.get('d_beta', 10)  # distância ideal (parâmetro)
+            n = len(self.hfvrp.V)  # número de vértices
+            
+            # Ajusta omega
+            self.omega[removal_heuristic] = int(min(n, max(1, 
+                self.omega[removal_heuristic] * (d_beta / d_H if d_H > 0 else 1))))
+            
+            # Limpa histórico de distâncias
+            ctrl['distances'] = []
 
     def acceptance_criterion(self, solution, reference_solution):
         """
@@ -311,13 +376,13 @@ class AILS:
             bool: True se o critério de parada foi atingido
         """
         # Número máximo de iterações
-        max_iterations = self.config.get('max_iterations', 2000)
+        max_iterations = self.config.get('max_iterations', 4000)
         
         # Número máximo de iterações sem melhoria
-        max_no_improvement = self.config.get('max_no_improvement', 500)
+        max_no_improvement = self.config.get('max_no_improvement', 1000)
         
         # Tempo máximo de execução em segundos
-        max_time = self.config.get('max_time', 3600)  # 1 hora por padrão
+        max_time = self.config.get('max_time', 900)  # 15 minutos
         
         # Verifica se atingiu número máximo de iterações
         if self.iteration >= max_iterations:
@@ -346,11 +411,18 @@ class AILS:
         
         # ETAPA 1: Construção da solução inicial
         initial_solution = self.construct_initial_solution()
+
+        if self.config.get('DEV', False):
+            print(f"Solução inicial: {initial_solution}")
         
         # ETAPA 2: Busca local inicial
         self.reference_solution = self.local_search(initial_solution)
         self.best_solution = self.reference_solution
         self.best_value = self._evaluate_solution(self.best_solution)
+        
+        if self.config.get('DEV', False):
+            print(f"Primeira Busca Local: {self.best_solution}")
+            print(f"Custo: {self.best_value}")
         
         # Loop principal do algoritmo
         while not self.stopping_criterion():
@@ -360,20 +432,22 @@ class AILS:
             while True:
                 # Escolhe uma heurística de remoção
                 removal_heuristic = random.choice(self.removal_heuristics)
-                print(f"Heurística de remoção: {removal_heuristic}")
+                if self.config.get('DEV', False):
+                    print(f"Heurística de remoção: {removal_heuristic}")
                 
                 # ETAPA 3: Perturbação
                 solution = self.perturbation_procedure(
                     reference_solution=self.reference_solution, 
                     removal_heuristic=removal_heuristic,
-                    alpha=0.3
+                    alpha=self.config.get('alpha', 0.4)
                 )
                 
                 # Verifica viabilidade
                 if self.hfvrp.check_solution_feasibility(solution):
-                    print("Solução viável encontrada!")
-                    print(f"Solução: {solution}")
-                    print(f"Custo: {self._evaluate_solution(solution)}")
+                    if self.config.get('DEV', False):
+                        print("Solução viável encontrada!")
+                        print(f"Solução: {solution}")
+                        print(f"Custo: {self._evaluate_solution(solution)}")
                     break
                 else:
                     continue
@@ -398,8 +472,17 @@ class AILS:
                 self.best_solution = solution
                 self.best_value = current_value
                 self.last_improvement_iteration = self.iteration
+
+            # coloca em um dicionário as informações da melhor solução, como numero de iterações, custo, solução inicial e custo
+            self.best_solution_info = {
+                'iterations': self.iteration,
+                'execution_time': time.time() - self.start_time,
+                'cost': self.best_value,
+                'initial_solution': initial_solution,
+                'initial_cost': self._evaluate_solution(initial_solution)
+            }
         
-        return self.best_solution
+        return self.best_solution, self.best_solution_info
 
     def _evaluate_solution(self, solution):
         """

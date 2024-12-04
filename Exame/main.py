@@ -50,8 +50,9 @@ if __name__ == "__main__":
     # print(perturbation)
     # print(f"Custo: {ails._evaluate_solution(perturbation)}")
 
-    solution = ails.solve()
+    solution, solution_info = ails.solve()
     print(solution)
     print(f"Custo: {ails._evaluate_solution(solution)}")
+    print(solution_info)
 
     
